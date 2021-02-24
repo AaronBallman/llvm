@@ -80,6 +80,11 @@ struct ParsedAttrInfo {
                                     const Decl *D) const {
     return true;
   }
+  /// Check if this attribute appertains to St, and issue a diagnostic if not.
+  virtual bool diagAppertainsToStmt(Sema &S, const ParsedAttr &Attr,
+                                    const Stmt *St) const {
+    return true;
+  }
   /// Check if this attribute is allowed by the language we are compiling, and
   /// issue a diagnostic if not.
   virtual bool diagLangOpts(Sema &S, const ParsedAttr &Attr) const {
@@ -582,6 +587,7 @@ public:
   unsigned getMaxArgs() const;
   bool hasVariadicArg() const;
   bool diagnoseAppertainsTo(class Sema &S, const Decl *D) const;
+  bool diagnoseAppertainsTo(class Sema &S, const Stmt *St) const;
   bool appliesToDecl(const Decl *D, attr::SubjectMatchRule MatchRule) const;
   void getMatchRules(const LangOptions &LangOpts,
                      SmallVectorImpl<std::pair<attr::SubjectMatchRule, bool>>

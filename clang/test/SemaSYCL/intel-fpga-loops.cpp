@@ -6,21 +6,21 @@ sycl::queue deviceQueue;
 
 // Test for Intel FPGA loop attributes applied not to a loop
 void foo() {
-  // expected-error@+1 {{'ivdep' attribute only applies to 'for', 'while', and 'do' statements}}
+  // expected-error@+1 {{'ivdep' attribute cannot be applied to a declaration}}
   [[intel::ivdep]] int a[10];
-  // expected-error@+1 {{'initiation_interval' attribute only applies to 'for', 'while', and 'do' statements}}
+  // expected-error@+1 {{'initiation_interval' attribute cannot be applied to a declaration}}
   [[intel::initiation_interval(2)]] int c[10];
-  // expected-error@+1 {{'max_concurrency' attribute only applies to 'for', 'while', and 'do' statements}}
+  // expected-error@+1 {{'max_concurrency' attribute cannot be applied to a declaration}}
   [[intel::max_concurrency(2)]] int d[10];
-  // expected-error@+1 {{'disable_loop_pipelining' attribute only applies to 'for', 'while', and 'do' statements}}
+  // expected-error@+1 {{'disable_loop_pipelining' attribute cannot be applied to a declaration}}
   [[intel::disable_loop_pipelining]] int g[10];
-  // expected-error@+1 {{'loop_coalesce' attribute only applies to 'for', 'while', and 'do' statements}}
+  // expected-error@+1 {{'loop_coalesce' attribute cannot be applied to a declaration}}
   [[intel::loop_coalesce(2)]] int h[10];
-  // expected-error@+1 {{'max_interleaving' attribute only applies to 'for', 'while', and 'do' statements}}
+  // expected-error@+1 {{'max_interleaving' attribute cannot be applied to a declaration}}
   [[intel::max_interleaving(4)]] int i[10];
-  // expected-error@+1 {{'speculated_iterations' attribute only applies to 'for', 'while', and 'do' statements}}
+  // expected-error@+1 {{'speculated_iterations' attribute cannot be applied to a declaration}}
   [[intel::speculated_iterations(6)]] int j[10];
-  // expected-error@+1 {{'nofusion' attribute only applies to 'for', 'while', and 'do' statements}}
+  // expected-error@+1 {{'nofusion' attribute cannot be applied to a declaration}}
   [[intel::nofusion]] int k[10];
 }
 

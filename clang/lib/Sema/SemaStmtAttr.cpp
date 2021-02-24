@@ -77,15 +77,6 @@ static Attr *handleSuppressAttr(Sema &S, Stmt *St, const ParsedAttr &A,
 
 template <typename FPGALoopAttrT>
 static Attr *handleIntelFPGALoopAttr(Sema &S, Stmt *St, const ParsedAttr &A) {
-  if(S.LangOpts.SYCLIsHost)
-    return nullptr;
-
-  if (!isa<ForStmt, CXXForRangeStmt, DoStmt, WhileStmt>(St)) {
-    S.Diag(A.getLoc(), diag::err_attribute_wrong_decl_type_str)
-        << A << "'for', 'while', and 'do' statements";
-    return nullptr;
-  }
-
   unsigned NumArgs = A.getNumArgs();
   if (NumArgs > 1) {
     S.Diag(A.getLoc(), diag::warn_attribute_too_many_arguments) << A << 1;
@@ -111,15 +102,6 @@ static Attr *handleIntelFPGALoopAttr(Sema &S, Stmt *St, const ParsedAttr &A) {
 template <>
 Attr *handleIntelFPGALoopAttr<SYCLIntelFPGADisableLoopPipeliningAttr>(
     Sema &S, Stmt *St, const ParsedAttr &A) {
-  if (S.LangOpts.SYCLIsHost)
-    return nullptr;
-
-  if (!isa<ForStmt, CXXForRangeStmt, DoStmt, WhileStmt>(St)) {
-    S.Diag(A.getLoc(), diag::err_attribute_wrong_decl_type_str)
-        << A << "'for', 'while', and 'do' statements";
-    return nullptr;
-  }
-
   unsigned NumArgs = A.getNumArgs();
   if (NumArgs > 0) {
     S.Diag(A.getLoc(), diag::warn_attribute_too_many_arguments) << A << 0;
@@ -283,12 +265,6 @@ CheckRedundantSYCLIntelFPGAIVDepAttrs(Sema &S, ArrayRef<const Attr *> Attrs) {
 }
 
 static Attr *handleIntelFPGAIVDepAttr(Sema &S, Stmt *St, const ParsedAttr &A) {
-  if (!isa<ForStmt, CXXForRangeStmt, DoStmt, WhileStmt>(St)) {
-    S.Diag(A.getLoc(), diag::err_attribute_wrong_decl_type_str)
-        << A << "'for', 'while', and 'do' statements";
-    return nullptr;
-  }
-
   unsigned NumArgs = A.getNumArgs();
   if (NumArgs > 2) {
     S.Diag(A.getLoc(), diag::err_attribute_too_many_arguments) << A << 2;
@@ -304,15 +280,6 @@ static Attr *handleIntelFPGAIVDepAttr(Sema &S, Stmt *St, const ParsedAttr &A) {
 
 static Attr *handleIntelFPGANofusionAttr(Sema &S, Stmt *St,
                                          const ParsedAttr &A) {
-  if (S.LangOpts.SYCLIsHost)
-    return nullptr;
-
-  if (!isa<ForStmt, CXXForRangeStmt, DoStmt, WhileStmt>(St)) {
-    S.Diag(A.getLoc(), diag::err_attribute_wrong_decl_type_str)
-        << A << "'for', 'while', and 'do' statements";
-    return nullptr;
-  }
-
   unsigned NumArgs = A.getNumArgs();
   if (NumArgs > 0) {
     S.Diag(A.getLoc(), diag::warn_attribute_too_many_arguments) << A << 0;
@@ -791,15 +758,54 @@ static Attr *handleLoopUnrollHint(Sema &S, Stmt *St, const ParsedAttr &A,
   return nullptr;
 }
 
+static bool handleCommonAttributeFeatures(Sema &S, Stmt *St,
+                                          const ParsedAttr &A) {
+  // We can't do much about unknown attributes.
+  if (A.getKind() == ParsedAttr::UnknownAttribute)
+    return false;
+
+  if (!A.diagnoseLangOpts(S))
+    return true;
+
+  if (S.CheckAttrTarget(A))
+    return true;
+
+  if (!A.diagnoseAppertainsTo(S, St))
+    return true;
+
+  // If the attribute has custom parsing, we can't do any further checks
+  // automatically.
+  if (A.hasCustomParsing())
+    return false;
+
+  // TODO: argument checking
+  return false;
+}
+
 static Attr *ProcessStmtAttribute(Sema &S, Stmt *St, const ParsedAttr &A,
                                   SourceRange Range) {
-  switch (A.getKind()) {
-  case ParsedAttr::UnknownAttribute:
+  if (A.isInvalid() || A.getKind() == ParsedAttr::IgnoredAttribute)
+    return nullptr;
+
+  // Unknown attributes are automatically warned on. Target-specific attributes
+  // which do not apply to the current target architecture are treated as
+  // though they were unknown attributes.
+  const TargetInfo *Aux = S.Context.getAuxTargetInfo();
+  if (A.getKind() == ParsedAttr::UnknownAttribute ||
+      !(A.existsInTarget(S.Context.getTargetInfo()) ||
+        (S.Context.getLangOpts().SYCLIsDevice && Aux &&
+         A.existsInTarget(*Aux)))) {
     S.Diag(A.getLoc(), A.isDeclspecAttribute()
                            ? (unsigned)diag::warn_unhandled_ms_attribute_ignored
                            : (unsigned)diag::warn_unknown_attribute_ignored)
         << A << A.getRange();
     return nullptr;
+  }
+
+  if (handleCommonAttributeFeatures(S, St, A))
+    return nullptr;
+
+  switch (A.getKind()) {
   case ParsedAttr::AT_FallThrough:
     return handleFallThroughAttr(S, St, A, Range);
   case ParsedAttr::AT_LoopHint:
@@ -835,8 +841,9 @@ static Attr *ProcessStmtAttribute(Sema &S, Stmt *St, const ParsedAttr &A,
   case ParsedAttr::AT_SYCLIntelFPGANofusion:
     return handleIntelFPGANofusionAttr(S, St, A);
   default:
-    // if we're here, then we parsed a known attribute, but didn't recognize
-    // it as a statement attribute => it is declaration attribute
+    // N.B., ClangAttrEmitter.cpp emits a diagnostic helper that ensures a
+    // declaration attribute is not written on a statement, but this code is
+    // needed for attributes in Attr.td that do not list any subjects.
     S.Diag(A.getRange().getBegin(), diag::err_decl_attribute_invalid_on_stmt)
         << A << St->getBeginLoc();
     return nullptr;
